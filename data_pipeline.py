@@ -14,16 +14,12 @@ test_dir = r'D:\DeepLearning\test_dataset.h5'
 # ==========================================
 # BƯỚC 1: XÂY DỰNG PIPELINE TIỀN XỬ LÝ (TRANSFORMS)
 # ==========================================
-# (Đã lược bỏ Grayscale và Resize vì file HDF5 đã chứa sẵn ảnh chuẩn 64x64 Grayscale, tiết kiệm tối đa CPU)
 train_transforms = transforms.Compose([
-    # 🔥 BÍ QUYẾT TĂNG ĐỘ CHÍNH XÁC KHI NHẬN DIỆN VẼ TAY TRÊN WEB:
-    # RandomAffine kết hợp Xoay, Dịch chuyển và Zoom để AI quen với chữ viết nguệch ngoạc
     transforms.RandomAffine(
-        degrees=8,               # Xoay ngẫu nhiên ±8 độ (thay thế cho RandomRotation cũ)
+        degrees=8,               # Xoay ngẫu nhiên ±8 độ
         translate=(0.08, 0.08),  # Dịch chuyển ngẫu nhiên ảnh lên/xuống/trái/phải 8%
         scale=(0.92, 1.08)       # Phóng to/thu nhỏ ngẫu nhiên nét chữ 8%
     ),
-    # (Đã xóa ColorJitter vì không cần thiết cho ảnh Đen trắng)
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.5], std=[0.5])
 ])

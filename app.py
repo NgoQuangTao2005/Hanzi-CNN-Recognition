@@ -29,7 +29,8 @@ class HanziCNN(nn.Module):
             nn.Conv2d(128, 256, kernel_size=3, padding=1), nn.BatchNorm2d(256), nn.ReLU(),
             nn.MaxPool2d(2, 2)
         )
-        self.gap = nn.AdaptiveAvgPool2d((1, 1))
+        # AdaptiveAvgPool2d thích ứng với kích thước đầu vào, đảm bảo đầu ra luôn là (256, 1, 1)
+        self.gap = nn.AdaptiveAvgPool2d(output_size=(1, 1))
         self.classifier = nn.Sequential(
             nn.Dropout(p=0.4),
             nn.Linear(256, num_classes)
@@ -122,7 +123,7 @@ def process_and_predict(img, use_auto_crop=False):
         
     result_label = {}
     BASE_URL = "https://hvdic.thivien.net/whv/" 
-    links_html = "<h4>🔗 Tra cứu chi tiết (Từ điển Hán Nôm - mở tab mới):</h4><ul style='line-height: 1.8;'>"
+    links_html = "<h4>Tra cứu chi tiết (Từ điển Hán Nôm - mở tab mới):</h4><ul style='line-height: 1.8;'>"
     has_link = False
 
     for i in range(3):
@@ -163,18 +164,19 @@ def predict_from_upload(image):
 # 4. GIAO DIỆN 
 # ==========================================
 with gr.Blocks(theme=gr.themes.Soft()) as demo:
-    gr.Markdown("<h1 style='text-align: center;'>App nhận diện Hán tự</h1>")
-    gr.Markdown("<p style='text-align: center;'>Tra cứu nhanh chóng: Hán tự + Pinyin + Cấp độ HSK + Từ điển Hán Nôm</p>")
+    gr.Markdown("<h1 style='text-align: center;'>App nhận diện chữ Hán</h1>")
+    gr.Markdown("<p style='text-align: center;'>Tra cứu nhanh chóng: chữ Hán + Phiên âm pinyin + Cấp độ HSK + Từ điển Hán Nôm</p>")
+    gr.Markdown("<p style='text-align: center;'>Lưu ý: Viết nét chữ dày để kết quả nhận diện chính xác hơn</p>")
     
     with gr.Row():
         with gr.Column(scale=1):
             with gr.Tabs():
-                with gr.TabItem("✏️ Vẽ tay trên Canvas"):
-                    canvas = gr.Sketchpad(type="pil", label="Viết Hán tự vào đây", brush=gr.Brush(colors=["#000000"]))
-                    btn_draw = gr.Button("🔍 Phân tích nét vẽ", variant="primary")
-                with gr.TabItem("🖼️ Tải ảnh lên"):
-                    upload = gr.Image(type="pil", image_mode="L", label="Ảnh Hán tự nền trắng")
-                    btn_upload = gr.Button("🔍 Phân tích ảnh", variant="primary")
+                with gr.TabItem("Vẽ tay trên Canvas"):
+                    canvas = gr.Sketchpad(type="pil", label="Viết chữ Hán vào đây", brush=gr.Brush(colors=["#000000"]))
+                    btn_draw = gr.Button("Phân tích nét vẽ", variant="primary")
+                with gr.TabItem("Tải ảnh lên"):
+                    upload = gr.Image(type="pil", image_mode="L", label="Ảnh chữ Hán nền trắng nét bút đen")
+                    btn_upload = gr.Button("Phân tích ảnh", variant="primary")
                     
         with gr.Column(scale=1):
             output_label = gr.Label(num_top_classes=3, label="Kết quả phân tích (Top 3)")
