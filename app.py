@@ -148,17 +148,18 @@ def process_and_predict(img, use_auto_crop=False):
     
     return result_label, links_html
 
-# Hàm vẽ tay
+# Hàm vẽ tay (Thời gian thực)
 def predict_from_sketch(image):
-    if image is None: return None, ""
+    if image is None: return None, "<i>Gợi ý tra cứu sẽ hiển thị ở đây...</i>"
     img = image.get("composite", image.get("background", None)) if isinstance(image, dict) else image
-    if img is None: return None, ""
+    if img is None: return None, "<i>Gợi ý tra cứu sẽ hiển thị ở đây...</i>"
+    
+    # Check xem sketchpad có trống (chưa có nét vẽ nào) hay không
+    img_np = np.array(img.convert('L'))
+    if np.all(img_np == 255) or np.all(img_np == 0):
+        return None, "<i>Gợi ý tra cứu sẽ hiển thị ở đây...</i>"
+        
     return process_and_predict(img, use_auto_crop=False) 
-
-# Hàm tải ảnh lên
-def predict_from_upload(image):
-    if image is None: return None, ""
-    return process_and_predict(image, use_auto_crop=False)
 
 # ==========================================
 # 4. GIAO DIỆN 
@@ -170,20 +171,20 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
     
     with gr.Row():
         with gr.Column(scale=1):
-            with gr.Tabs():
-                with gr.TabItem("Vẽ tay trên Canvas"):
-                    canvas = gr.Sketchpad(type="pil", label="Viết chữ Hán vào đây", brush=gr.Brush(colors=["#000000"]))
-                    btn_draw = gr.Button("Phân tích nét vẽ", variant="primary")
-                with gr.TabItem("Tải ảnh lên"):
-                    upload = gr.Image(type="pil", image_mode="L", label="Ảnh chữ Hán nền trắng nét bút đen")
-                    btn_upload = gr.Button("Phân tích ảnh", variant="primary")
+            # Hiển thị trực tiếp bảng vẽ Canvas, loại bỏ hoàn toàn cấu trúc Tabs rườm rà
+            canvas = gr.Sketchpad(type="pil", label="Viết chữ Hán vào đây", brush=gr.Brush(colors=["#000000"]))
                     
         with gr.Column(scale=1):
             output_label = gr.Label(num_top_classes=3, label="Kết quả phân tích (Top 3)")
             output_links = gr.HTML(label="Link tra cứu", value="<i>Gợi ý tra cứu sẽ hiển thị ở đây...</i>")
             
-    btn_draw.click(fn=predict_from_sketch, inputs=canvas, outputs=[output_label, output_links])
-    btn_upload.click(fn=predict_from_upload, inputs=upload, outputs=[output_label, output_links])
+    # --- CƠ CHẾ NHẬN DIỆN THỜI GIAN THỰC (REAL-TIME INFERENCE) ---
+    canvas.change(
+        fn=predict_from_sketch, 
+        inputs=canvas, 
+        outputs=[output_label, output_links],
+        queue=False
+    )
 
 if __name__ == "__main__":
     demo.launch(share=False, inbrowser=True)
