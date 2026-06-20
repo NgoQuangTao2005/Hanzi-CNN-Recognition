@@ -88,7 +88,6 @@ def letterbox_resize(img, target_size=(64, 64)):
     return new_img
 
 def process_and_predict(img, use_auto_crop=False):
-    # Nền trắng
     if img.mode in ('RGBA', 'LA'):
         bg = Image.new('RGB', img.size, (255, 255, 255))
         bg.paste(img, mask=img.split()[3])
@@ -148,43 +147,113 @@ def process_and_predict(img, use_auto_crop=False):
     
     return result_label, links_html
 
-# Hàm vẽ tay (Thời gian thực)
-def predict_from_sketch(image):
-    if image is None: return None, "<i>Gợi ý tra cứu sẽ hiển thị ở đây...</i>"
+# Hàm dự đoán thời gian thực để map nhãn chữ đơn lẻ lên Nút bấm
+def predict_realtime_buttons(image):
+    default_html = "<i>Gợi ý tra cứu sẽ hiển thị ở đây...</i>"
+    if image is None: 
+        return "？", "？", "？", default_html
     img = image.get("composite", image.get("background", None)) if isinstance(image, dict) else image
-    if img is None: return None, "<i>Gợi ý tra cứu sẽ hiển thị ở đây...</i>"
+    if img is None: 
+        return "？", "？", "？", default_html
     
-    # Check xem sketchpad có trống (chưa có nét vẽ nào) hay không
-    img_np = np.array(img.convert('L'))
-    if np.all(img_np == 255) or np.all(img_np == 0):
-        return None, "<i>Gợi ý tra cứu sẽ hiển thị ở đây...</i>"
+    # Chuyển đổi sang ảnh xám để kiểm tra
+    img_gray = img.convert('L')
+    img_np = np.array(img_gray)
+    
+    # --- ĐOẠN THÊM VÀO ĐỂ BẮT ẢNH TRẮNG ---
+    # Nếu ảnh trắng tinh (không có nét vẽ nào hoặc là ảnh reset) thì trả về trạng thái trống
+    if np.all(img_np >= 250) or np.all(img_np == 0):
+        return "？", "？", "？", default_html
+    # --------------------------------------
         
-    return process_and_predict(img, use_auto_crop=False) 
+    res_dict, links_html = process_and_predict(img, use_auto_crop=False)
+    
+    # Bóc tách ký tự chữ Hán nằm trong dấu 【 】 từ key của từ điển trả về
+    hanzi_outputs = []
+    for key in res_dict.keys():
+        try:
+            char = key.split("【")[1].split("】")[0].strip()
+            hanzi_outputs.append(char)
+        except:
+            hanzi_outputs.append("？")
+            
+    while len(hanzi_outputs) < 3:
+        hanzi_outputs.append("？")
+        
+    return hanzi_outputs[0], hanzi_outputs[1], hanzi_outputs[2], links_html
+
+# Hàm cộng dồn chữ vào đoạn văn tổng và kích hoạt xóa bảng vẽ Canvas
+def select_and_clear(selected_char, current_text):
+    if selected_char == "？" or not selected_char:
+        return current_text, gr.update()
+    if not current_text:
+        current_text = ""
+    new_text = current_text + selected_char
+    
+    # Sử dụng cấu trúc dictionary trống chuẩn của Gradio 4+ 
+    # Giúp xóa sạch sành sanh mọi layer nét vẽ cũ mà KHÔNG làm reset độ dày cọ bút!
+    return new_text, {"background": None, "layers": [], "composite": None}
 
 # ==========================================
-# 4. GIAO DIỆN 
+# 4. GIAO DIỆN BỘ GÕ CHỮ HÁN VIẾT TAY
 # ==========================================
 with gr.Blocks(theme=gr.themes.Soft()) as demo:
-    gr.Markdown("<h1 style='text-align: center;'>App nhận diện chữ Hán</h1>")
-    gr.Markdown("<p style='text-align: center;'>Tra cứu nhanh chóng: chữ Hán + Phiên âm pinyin + Cấp độ HSK + Từ điển Hán Nôm</p>")
-    gr.Markdown("<p style='text-align: center;'>Lưu ý: Viết nét chữ dày để kết quả nhận diện chính xác hơn</p>")
+    gr.Markdown("<h1 style='text-align: center;'>Hệ thống bộ gõ chữ Hán viết tay thời gian thực</h1>")
+    gr.Markdown("<p style='text-align: center;'>Viết nét chữ -> Bấm chọn chữ đúng hệ thống gợi ý để tự động ghép thành câu văn</p>")
     
     with gr.Row():
         with gr.Column(scale=1):
-            # Hiển thị trực tiếp bảng vẽ Canvas, loại bỏ hoàn toàn cấu trúc Tabs rườm rà
-            canvas = gr.Sketchpad(type="pil", label="Viết chữ Hán vào đây", brush=gr.Brush(colors=["#000000"]))
+            # Khung Canvas vẽ tay thời gian thực
+            canvas = gr.Sketchpad(type="pil", label="Viết từng chữ vào đây", brush=gr.Brush(colors=["#000000"]))
                     
         with gr.Column(scale=1):
-            output_label = gr.Label(num_top_classes=3, label="Kết quả phân tích (Top 3)")
+            gr.Markdown("### 🎯 Kết quả gợi ý nhanh (Bấm để chọn chữ):")
+            with gr.Row():
+                btn_top1 = gr.Button("？", variant="primary", size="lg")
+                btn_top2 = gr.Button("？", variant="secondary", size="lg")
+                btn_top3 = gr.Button("？", variant="secondary", size="lg")
+            
             output_links = gr.HTML(label="Link tra cứu", value="<i>Gợi ý tra cứu sẽ hiển thị ở đây...</i>")
             
-    # --- CƠ CHẾ NHẬN DIỆN THỜI GIAN THỰC (REAL-TIME INFERENCE) ---
+    # Ô chứa kết quả toàn bộ câu văn
+    gr.Markdown("---")
+    with gr.Row():
+        output_text_area = gr.Textbox(
+            label="📝 Câu/Đoạn văn bản hoàn chỉnh (Có thể trực tiếp sao chép hoặc sửa đổi)", 
+            placeholder="Chữ ông chọn ở trên sẽ tự động nối đuôi xếp vào đây...",
+            lines=3,
+            scale=4
+        )
+        btn_clear_text = gr.Button("Xóa đoạn văn", variant="stop", scale=1)
+            
+    # --- THIẾT LẬP LOGIC TƯƠNG TÁC ---
+    # 1. Tự động dự đoán và hiển thị nhãn chữ lên nút bấm khi viết
     canvas.change(
-        fn=predict_from_sketch, 
+        fn=predict_realtime_buttons, 
         inputs=canvas, 
-        outputs=[output_label, output_links],
+        outputs=[btn_top1, btn_top2, btn_top3, output_links],
         queue=False
     )
+    
+    # 2. Logic khi click chọn chữ: Ghép chữ vào Textbox và tự động xóa bảng vẽ để viết chữ tiếp theo
+    btn_top1.click(
+        fn=select_and_clear, 
+        inputs=[btn_top1, output_text_area], 
+        outputs=[output_text_area, canvas]
+    )
+    btn_top2.click(
+        fn=select_and_clear, 
+        inputs=[btn_top2, output_text_area], 
+        outputs=[output_text_area, canvas]
+    )
+    btn_top3.click(
+        fn=select_and_clear, 
+        inputs=[btn_top3, output_text_area], 
+        outputs=[output_text_area, canvas]
+    )
+    
+    # Nút xóa nhanh toàn bộ chuỗi văn bản đã gõ
+    btn_clear_text.click(fn=lambda: "", outputs=output_text_area)
 
 if __name__ == "__main__":
     demo.launch(share=False, inbrowser=True)
