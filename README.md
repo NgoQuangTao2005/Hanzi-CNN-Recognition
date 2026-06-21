@@ -31,9 +31,10 @@ The dataset used for training this model was sourced from [Handwritten Chinese C
 1. **Clone the repository:**
    ```bash
    git clone [https://github.com/NgoQuangTao2005/Hanzi-CNN-Recognition.git](https://github.com/NgoQuangTao2005/Hanzi-CNN-Recognition.git)
-Install dependencies:
 
-pip install -r requirements.txt
+2. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
 
 3. **Launch the Demo:**
    ```bash
