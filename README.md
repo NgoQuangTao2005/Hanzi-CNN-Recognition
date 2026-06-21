@@ -33,10 +33,11 @@ The dataset used for training this model was sourced from [Handwritten Chinese C
    git clone [https://github.com/NgoQuangTao2005/Hanzi-CNN-Recognition.git](https://github.com/NgoQuangTao2005/Hanzi-CNN-Recognition.git)
 
 2. **Install dependencies:**
+   In Terminal
    ```bash
    pip install -r requirements.txt
 
-3. **Launch the Demo:**
+4. **Launch the Demo:**
    ```bash
    python app.py
 The Gradio interface will launch in your browser automatically.
