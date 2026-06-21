@@ -7,9 +7,6 @@ import numpy as np
 import json
 import os
 
-# ==========================================
-# 1. KIẾN TRÚC MẠNG CNN 
-# ==========================================
 class HanziCNN(nn.Module):
     def __init__(self, num_classes):
         super(HanziCNN, self).__init__()
@@ -29,7 +26,6 @@ class HanziCNN(nn.Module):
             nn.Conv2d(128, 256, kernel_size=3, padding=1), nn.BatchNorm2d(256), nn.ReLU(),
             nn.MaxPool2d(2, 2)
         )
-        # AdaptiveAvgPool2d thích ứng với kích thước đầu vào, đảm bảo đầu ra luôn là (256, 1, 1)
         self.gap = nn.AdaptiveAvgPool2d(output_size=(1, 1))
         self.classifier = nn.Sequential(
             nn.Dropout(p=0.4),
@@ -45,9 +41,6 @@ class HanziCNN(nn.Module):
         x = torch.flatten(x, 1)
         return self.classifier(x)
 
-# ==========================================
-# 2. KHỞI TẠO MÔI TRƯỜNG & NẠP TỪ ĐIỂN
-# ==========================================
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 with open('mapping.json', 'r', encoding='utf-8') as f:
@@ -64,17 +57,13 @@ else:
 
 NUM_CLASSES = len(idx_to_hanzi)
 model = HanziCNN(num_classes=NUM_CLASSES).to(device)
-model.load_state_dict(torch.load('Tao_hanzi_best_weight.pth', map_location=device))
+model.load_state_dict(torch.load('hanzi_best_weight.pth', map_location=device))
 model.eval()
 
-# ==========================================
-# 3. CÁC HÀM XỬ LÝ ẢNH 
-# ==========================================
 def letterbox_resize(img, target_size=(64, 64)):
-    """Hàm chuẩn hóa tỷ lệ y hệt lúc huấn luyện"""
     w, h = img.size
     max_dim = max(w, h)
-    target_max = int(min(target_size) * 0.85) # Padding 85% an toàn
+    target_max = int(min(target_size) * 0.85) 
     ratio = target_max / max_dim
     new_w, new_h = int(w * ratio), int(h * ratio)
     
@@ -122,7 +111,7 @@ def process_and_predict(img, use_auto_crop=False):
         
     result_label = {}
     BASE_URL = "https://hvdic.thivien.net/whv/" 
-    links_html = "<h4>Tra cứu chi tiết (Từ điển Hán Nôm - mở tab mới):</h4><ul style='line-height: 1.8;'>"
+    links_html = "<h4>Search for details (Hán-Nôm Dictionary - open new tab):</h4><ul style='line-height: 1.8;'>"
     has_link = False
 
     for i in range(3):
@@ -141,34 +130,28 @@ def process_and_predict(img, use_auto_crop=False):
             has_link = True
             
     if not has_link:
-        links_html += "<li><i style='color: gray;'>Các chữ dự đoán không nằm trong nhóm HSK 1-6.</i></li>"
+        links_html += "<li><i style='color: gray;'>The predicted characters are not in the HSK 1-6 range.</i></li>"
         
     links_html += "</ul>"
     
     return result_label, links_html
 
-# Hàm dự đoán thời gian thực để map nhãn chữ đơn lẻ lên Nút bấm
 def predict_realtime_buttons(image):
-    default_html = "<i>Gợi ý tra cứu sẽ hiển thị ở đây...</i>"
+    default_html = "<i>Search suggestions will appear here...</i>"
     if image is None: 
         return "？", "？", "？", default_html
     img = image.get("composite", image.get("background", None)) if isinstance(image, dict) else image
     if img is None: 
         return "？", "？", "？", default_html
     
-    # Chuyển đổi sang ảnh xám để kiểm tra
     img_gray = img.convert('L')
     img_np = np.array(img_gray)
     
-    # --- ĐOẠN THÊM VÀO ĐỂ BẮT ẢNH TRẮNG ---
-    # Nếu ảnh trắng tinh (không có nét vẽ nào hoặc là ảnh reset) thì trả về trạng thái trống
     if np.all(img_np >= 250) or np.all(img_np == 0):
         return "？", "？", "？", default_html
-    # --------------------------------------
         
     res_dict, links_html = process_and_predict(img, use_auto_crop=False)
     
-    # Bóc tách ký tự chữ Hán nằm trong dấu 【 】 từ key của từ điển trả về
     hanzi_outputs = []
     for key in res_dict.keys():
         try:
@@ -182,7 +165,6 @@ def predict_realtime_buttons(image):
         
     return hanzi_outputs[0], hanzi_outputs[1], hanzi_outputs[2], links_html
 
-# Hàm cộng dồn chữ vào đoạn văn tổng và kích hoạt xóa bảng vẽ Canvas
 def select_and_clear(selected_char, current_text):
     if selected_char == "？" or not selected_char:
         return current_text, gr.update()
@@ -190,44 +172,35 @@ def select_and_clear(selected_char, current_text):
         current_text = ""
     new_text = current_text + selected_char
     
-    # Sử dụng cấu trúc dictionary trống chuẩn của Gradio 4+ 
-    # Giúp xóa sạch sành sanh mọi layer nét vẽ cũ mà KHÔNG làm reset độ dày cọ bút!
     return new_text, {"background": None, "layers": [], "composite": None}
 
-# ==========================================
-# 4. GIAO DIỆN BỘ GÕ CHỮ HÁN VIẾT TAY
-# ==========================================
+
 with gr.Blocks(theme=gr.themes.Soft()) as demo:
-    gr.Markdown("<h1 style='text-align: center;'>Hệ thống bộ gõ chữ Hán viết tay thời gian thực</h1>")
-    gr.Markdown("<p style='text-align: center;'>Viết nét chữ -> Bấm chọn chữ đúng hệ thống gợi ý để tự động ghép thành câu văn</p>")
+    gr.Markdown("<h1 style='text-align: center;'>Real-time Handwritten Chinese Input</h1>")
     
     with gr.Row():
         with gr.Column(scale=1):
-            # Khung Canvas vẽ tay thời gian thực
-            canvas = gr.Sketchpad(type="pil", label="Viết từng chữ vào đây", brush=gr.Brush(colors=["#000000"]))
+            canvas = gr.Sketchpad(type="pil", label="Write Chinese characters here", brush=gr.Brush(colors=["#000000"]))
                     
         with gr.Column(scale=1):
-            gr.Markdown("### 🎯 Kết quả gợi ý nhanh (Bấm để chọn chữ):")
+            gr.Markdown("### Quick Search Results (Click to Select):")
             with gr.Row():
                 btn_top1 = gr.Button("？", variant="primary", size="lg")
                 btn_top2 = gr.Button("？", variant="secondary", size="lg")
                 btn_top3 = gr.Button("？", variant="secondary", size="lg")
             
-            output_links = gr.HTML(label="Link tra cứu", value="<i>Gợi ý tra cứu sẽ hiển thị ở đây...</i>")
+            output_links = gr.HTML(label="Search Links", value="<i>Search suggestions will appear here...</i>")
             
-    # Ô chứa kết quả toàn bộ câu văn
     gr.Markdown("---")
     with gr.Row():
         output_text_area = gr.Textbox(
-            label="📝 Câu/Đoạn văn bản hoàn chỉnh (Có thể trực tiếp sao chép hoặc sửa đổi)", 
-            placeholder="Chữ ông chọn ở trên sẽ tự động nối đuôi xếp vào đây...",
+            label="Complete Sentence/Paragraph (Can be copied or edited directly)", 
+            placeholder="The selected characters will be automatically appended here...",
             lines=3,
             scale=4
         )
-        btn_clear_text = gr.Button("Xóa đoạn văn", variant="stop", scale=1)
+        btn_clear_text = gr.Button("Clear Text", variant="stop", scale=1)
             
-    # --- THIẾT LẬP LOGIC TƯƠNG TÁC ---
-    # 1. Tự động dự đoán và hiển thị nhãn chữ lên nút bấm khi viết
     canvas.change(
         fn=predict_realtime_buttons, 
         inputs=canvas, 
@@ -235,7 +208,6 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
         queue=False
     )
     
-    # 2. Logic khi click chọn chữ: Ghép chữ vào Textbox và tự động xóa bảng vẽ để viết chữ tiếp theo
     btn_top1.click(
         fn=select_and_clear, 
         inputs=[btn_top1, output_text_area], 
@@ -252,7 +224,6 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
         outputs=[output_text_area, canvas]
     )
     
-    # Nút xóa nhanh toàn bộ chuỗi văn bản đã gõ
     btn_clear_text.click(fn=lambda: "", outputs=output_text_area)
 
 if __name__ == "__main__":
