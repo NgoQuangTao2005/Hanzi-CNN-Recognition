@@ -19,6 +19,7 @@ The dataset used for training this model was sourced from [Handwritten Chinese C
 - `model.ipynb`: Jupyter notebook for CNN architecture and model training.
 - `app.py`: Gradio application for real-time model inference.
 - `mapping.json`, `mapping_hsk.json`, `mapping_pinyin.json`: Lookup files for character information, HSK levels, and Pinyin.
+- `hanzi_best_weight.pth`: My own best weights file. You can create your own by training the CNN in `model.ipynb`.
 - `requirements.txt`: Project dependencies.
 
 ## Tech Stack
