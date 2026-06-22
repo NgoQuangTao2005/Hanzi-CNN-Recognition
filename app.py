@@ -112,7 +112,7 @@ def process_and_predict(img, use_auto_crop=False):
         
     result_label = {}
     BASE_URL = "https://hvdic.thivien.net/whv/" 
-    links_html = "<h4>Search for details (Hán-Nôm Dictionary - open new tab):</h4><ul style='line-height: 1.8;'>"
+    links_html = "<h4>Search for details (Hán-Nôm Dictionary (for Vietnamese people) - open new tab):</h4><ul style='line-height: 1.8;'>"
     has_link = False
 
     for i in range(3):
