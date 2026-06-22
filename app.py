@@ -176,11 +176,11 @@ def select_and_clear(selected_char, current_text):
 
 
 with gr.Blocks(theme=gr.themes.Soft()) as demo:
-    gr.Markdown("<h1 style='text-align: center;'>Real-time Handwritten Chinese Input</h1>")
+    gr.Markdown("<h1 style='text-align: center;'>Real-time Handwritten Chinese Recognition</h1>")
     
     with gr.Row():
         with gr.Column(scale=1):
-            canvas = gr.Sketchpad(type="pil", label="Write Chinese characters here", brush=gr.Brush(colors=["#000000"]))
+            canvas = gr.Sketchpad(type="pil", label="Write Chinese character here", brush=gr.Brush(colors=["#000000"]))
                     
         with gr.Column(scale=1):
             gr.Markdown("### Quick Search Results (Click to Select):")

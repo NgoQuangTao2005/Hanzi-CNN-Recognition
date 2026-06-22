@@ -60,7 +60,7 @@ try:
         idx_to_class = json.load(f)
     print(f"Loaded mapping.json successfully with {len(idx_to_class)} Chinese characters.")
 except FileNotFoundError:
-    print("❌ ERROR: mapping.json not found.")
+    print("ERROR: mapping.json not found.")
 
 BATCH_SIZE = 256 
 NUM_WORKERS = 2
