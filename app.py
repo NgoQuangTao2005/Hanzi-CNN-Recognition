@@ -189,25 +189,8 @@ def translate_text(text, target_lang):
             return "Selected language not supported"
     except Exception as e:
         return f"Translation Error: {str(e)}"
-
-custom_dark_css = """
-body, html, .gradio-container {
-    background-color: #0b0f19 !important;
-    color: #f3f4f6 !important;
-}
-:root, .dark {
-    --body-background-fill: #0b0f19 !important;
-    --background-fill-primary: #111827 !important;
-    --background-fill-secondary: #1f2937 !important;
-    --border-color-primary: #374151 !important;
-    --block-background-fill: #111827 !important;
-    --block-label-text-color: #9ca3af !important;
-    --input-background-fill: #1f2937 !important;
-    --input-text-color: #f3f4f6 !important;
-}
-"""
-
-with gr.Blocks(theme=gr.themes.Soft(), css=custom_dark_css) as demo:
+    
+with gr.Blocks(theme=gr.themes.Soft()) as demo:
     gr.Markdown("<h1 style='text-align: center;'>Real-time Chinese Handwriting Recognition & Translator</h1>")
     
     with gr.Tabs():
