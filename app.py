@@ -6,6 +6,7 @@ from PIL import Image
 import numpy as np
 import json
 import os
+from deep_translator import GoogleTranslator
 
 class HanziCNN(nn.Module):
     def __init__(self, num_classes):
@@ -60,6 +61,17 @@ model = HanziCNN(num_classes=NUM_CLASSES).to(device)
 model.load_state_dict(torch.load('hanzi_best_weight.pth', map_location=device))
 model.eval()
 
+LANGUAGE_CODES = {
+    "English 🇬🇧": "en",
+    "Vietnamese 🇻🇳": "vi",
+    "French 🇫🇷": "fr",
+    "Russian 🇷🇺": "ru",
+    "German 🇩🇪": "de",
+    "Spanish 🇪🇸": "es",
+    "Korean 🇰🇷": "ko",
+    "Japanese 🇯🇵": "ja"
+}
+
 def letterbox_resize(img, target_size=(64, 64)):
     w, h = img.size
     max_dim = max(w, h)
@@ -85,17 +97,6 @@ def process_and_predict(img, use_auto_crop=False):
         img = img.convert('RGB')
 
     img_gray = img.convert('L')
-
-    if use_auto_crop:
-        img_arr = np.array(img_gray)
-        binary_arr = np.where(img_arr < 200, 0, 255).astype(np.uint8)
-        coords = np.argwhere(binary_arr == 0)
-        
-        if len(coords) > 0:
-            y0, x0 = coords.min(axis=0)
-            y1, x1 = coords.max(axis=0)
-            img_gray = img_gray.crop((x0, y0, x1, y1))
-
     img_64 = letterbox_resize(img_gray, target_size=(64, 64))
 
     transform = transforms.Compose([
@@ -126,7 +127,7 @@ def process_and_predict(img, use_auto_crop=False):
         
         if "HSK" in hsk_str and "Ngoài" not in hsk_str:
             full_url = f"{BASE_URL}{hanzi_char}"
-            links_html += f"<li><a href='{full_url}' target='_blank' style='color: #2563eb; text-decoration: none; font-weight: bold;'>Link tra cứu chữ 【 {hanzi_char} 】</a> - <i>{hsk_str}</i></li>"
+            links_html += f"<li><a href='{full_url}' target='_blank' style='color: #2563eb; text-decoration: none; font-weight: bold;'>Lookup Link for 【 {hanzi_char} 】</a> - <i>{hsk_str}</i></li>"
             has_link = True
             
     if not has_link:
@@ -174,40 +175,115 @@ def select_and_clear(selected_char, current_text):
     
     return new_text, {"background": None, "layers": [], "composite": None}
 
+def translate_text(text, target_lang):
+    """Translate Chinese text to one selected language"""
+    if not text or text.strip() == "":
+        return "Translation will appear here..."
+    try:
+        if target_lang in LANGUAGE_CODES:
+            target_lang_code = LANGUAGE_CODES[target_lang]
+           
+            result = GoogleTranslator(source='zh-CN', target=target_lang_code).translate(text)
+            return result
+        else:
+            return "Selected language not supported"
+    except Exception as e:
+        return f"Translation Error: {str(e)}"
 
-with gr.Blocks(theme=gr.themes.Soft()) as demo:
-    gr.Markdown("<h1 style='text-align: center;'>Real-time Handwritten Chinese Recognition</h1>")
+custom_dark_css = """
+body, html, .gradio-container {
+    background-color: #0b0f19 !important;
+    color: #f3f4f6 !important;
+}
+:root, .dark {
+    --body-background-fill: #0b0f19 !important;
+    --background-fill-primary: #111827 !important;
+    --background-fill-secondary: #1f2937 !important;
+    --border-color-primary: #374151 !important;
+    --block-background-fill: #111827 !important;
+    --block-label-text-color: #9ca3af !important;
+    --input-background-fill: #1f2937 !important;
+    --input-text-color: #f3f4f6 !important;
+}
+"""
+
+with gr.Blocks(theme=gr.themes.Soft(), css=custom_dark_css) as demo:
+    gr.Markdown("<h1 style='text-align: center;'>Real-time Chinese Handwriting Recognition & Translator</h1>")
     
-    with gr.Row():
-        with gr.Column(scale=1):
-            canvas = gr.Sketchpad(type="pil", label="Write Chinese character here", brush=gr.Brush(colors=["#000000"]))
-                    
-        with gr.Column(scale=1):
-            gr.Markdown("### Quick Search Results (Click to Select):")
+    with gr.Tabs():
+       
+        with gr.TabItem("Character Recognition"):
+            
             with gr.Row():
-                btn_top1 = gr.Button("？", variant="primary", size="lg")
-                btn_top2 = gr.Button("？", variant="secondary", size="lg")
-                btn_top3 = gr.Button("？", variant="secondary", size="lg")
+                with gr.Column(scale=1):
+                    canvas = gr.Sketchpad(type="pil", label="Write Chinese character here", brush=gr.Brush(colors=["#000000"]))
+                            
+                with gr.Column(scale=1):
+                    gr.Markdown("### Quick Search Results (Click to Select):")
+                    with gr.Row():
+                        btn_top1 = gr.Button("？", variant="primary", size="lg")
+                        btn_top2 = gr.Button("？", variant="secondary", size="lg")
+                        btn_top3 = gr.Button("？", variant="secondary", size="lg")
+                    
+                    output_links = gr.HTML(label="Search Links", value="<i>Search suggestions will appear here...</i>")
+                    
+            gr.Markdown("---")
+            with gr.Row():
+                output_text_area = gr.Textbox(
+                    label="Complete Sentence/Paragraph (Can be copied or edited directly)", 
+                    placeholder="The selected characters will be automatically appended here...",
+                    lines=3,
+                    scale=4
+                )
+                btn_clear_text = gr.Button("Clear Text", variant="stop", scale=1)
+                    
+            canvas.change(
+                fn=predict_realtime_buttons, 
+                inputs=canvas, 
+                outputs=[btn_top1, btn_top2, btn_top3, output_links],
+                queue=False
+            )
             
-            output_links = gr.HTML(label="Search Links", value="<i>Search suggestions will appear here...</i>")
+      
+        with gr.TabItem("Translator"):
+            gr.Markdown("### Translate Chinese text to a language of your choice")
             
-    gr.Markdown("---")
-    with gr.Row():
-        output_text_area = gr.Textbox(
-            label="Complete Sentence/Paragraph (Can be copied or edited directly)", 
-            placeholder="The selected characters will be automatically appended here...",
-            lines=3,
-            scale=4
-        )
-        btn_clear_text = gr.Button("Clear Text", variant="stop", scale=1)
+            with gr.Row():
+                input_text = gr.Textbox(
+                    label="Chinese Text Source",
+                    placeholder="Text from Tab 1 will sync here automatically, or type manually...",
+                    lines=4
+                )
             
-    canvas.change(
-        fn=predict_realtime_buttons, 
-        inputs=canvas, 
-        outputs=[btn_top1, btn_top2, btn_top3, output_links],
-        queue=False
+            with gr.Row():
+               
+                lang_dropdown = gr.Dropdown(
+                    choices=list(LANGUAGE_CODES.keys()),
+                    value="English 🇬🇧",
+                    label="Target Language"
+                )
+                translate_btn = gr.Button("Translate", variant="primary", size="lg")
+            
+            gr.Markdown("---")
+            
+            with gr.Row():
+                output_text = gr.Textbox(
+                    label="Translation Result", 
+                    value="Translation will appear here...", 
+                    interactive=False, 
+                    lines=5
+                )
+
+   
+    def sync_tabs(text):
+        return text
+
+    output_text_area.change(
+        fn=sync_tabs,
+        inputs=output_text_area,
+        outputs=input_text
     )
-    
+
     btn_top1.click(
         fn=select_and_clear, 
         inputs=[btn_top1, output_text_area], 
@@ -225,6 +301,17 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
     )
     
     btn_clear_text.click(fn=lambda: "", outputs=output_text_area)
+    
+    translate_btn.click(
+        fn=translate_text,
+        inputs=[input_text, lang_dropdown],
+        outputs=output_text
+    )
+    lang_dropdown.change(
+        fn=translate_text,
+        inputs=[input_text, lang_dropdown],
+        outputs=output_text
+    )
 
 if __name__ == "__main__":
     demo.launch(share=False, inbrowser=True)
