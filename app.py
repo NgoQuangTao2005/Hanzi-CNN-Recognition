@@ -7,6 +7,8 @@ import numpy as np
 import json
 import os
 from deep_translator import GoogleTranslator
+from pypinyin import pinyin, Style 
+
 
 class HanziCNN(nn.Module):
     def __init__(self, num_classes):
@@ -42,6 +44,7 @@ class HanziCNN(nn.Module):
         x = torch.flatten(x, 1)
         return self.classifier(x)
 
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 with open('mapping.json', 'r', encoding='utf-8') as f:
@@ -71,6 +74,7 @@ LANGUAGE_CODES = {
     "Korean 🇰🇷": "ko",
     "Japanese 🇯🇵": "ja"
 }
+
 
 def letterbox_resize(img, target_size=(64, 64)):
     w, h = img.size
@@ -112,7 +116,7 @@ def process_and_predict(img, use_auto_crop=False):
         
     result_label = {}
     BASE_URL = "https://hvdic.thivien.net/whv/" 
-    links_html = "<h4>Search for details (Hán-Nôm Dictionary (for Vietnamese people) - open new tab):</h4><ul style='line-height: 1.8;'>"
+    links_html = "<h4>Search for details (Hán-Nôm Dictionary - open new tab):</h4><ul style='line-height: 1.8;'>"
     has_link = False
 
     for i in range(3):
@@ -132,27 +136,22 @@ def process_and_predict(img, use_auto_crop=False):
             
     if not has_link:
         links_html += "<li><i style='color: gray;'>The predicted characters are not in the HSK 1-6 range.</i></li>"
-        
     links_html += "</ul>"
     
     return result_label, links_html
 
 def predict_realtime_buttons(image):
     default_html = "<i>Search suggestions will appear here...</i>"
-    if image is None: 
-        return "？", "？", "？", default_html
+    if image is None: return "？", "？", "？", default_html
     img = image.get("composite", image.get("background", None)) if isinstance(image, dict) else image
-    if img is None: 
-        return "？", "？", "？", default_html
+    if img is None: return "？", "？", "？", default_html
     
     img_gray = img.convert('L')
     img_np = np.array(img_gray)
-    
     if np.all(img_np >= 250) or np.all(img_np == 0):
         return "？", "？", "？", default_html
         
     res_dict, links_html = process_and_predict(img, use_auto_crop=False)
-    
     hanzi_outputs = []
     for key in res_dict.keys():
         try:
@@ -172,29 +171,64 @@ def select_and_clear(selected_char, current_text):
     if not current_text:
         current_text = ""
     new_text = current_text + selected_char
-    
     return new_text, {"background": None, "layers": [], "composite": None}
 
+
 def translate_text(text, target_lang):
-    """Translate Chinese text to one selected language"""
     if not text or text.strip() == "":
         return "Translation will appear here..."
     try:
         if target_lang in LANGUAGE_CODES:
             target_lang_code = LANGUAGE_CODES[target_lang]
-           
             result = GoogleTranslator(source='zh-CN', target=target_lang_code).translate(text)
             return result
         else:
             return "Selected language not supported"
     except Exception as e:
         return f"Translation Error: {str(e)}"
+
+def convert_to_pinyin(text):
+    if not text or text.strip() == "":
+        return "Pinyin pronunciation will appear here..."
     
-with gr.Blocks(theme=gr.themes.Soft()) as demo:
-    gr.Markdown("<h1 style='text-align: center;'>Real-time Chinese Handwriting Recognition & Translator</h1>")
+    pinyin_list = pinyin(text, style=Style.TONE)
+    
+    pinyin_str = " ".join([item[0] for item in pinyin_list])
+    return pinyin_str
+
+
+custom_dark_css = """
+body, html, .gradio-container {
+    background-color: #0b0f19 !important;
+    color: #f3f4f6 !important;
+}
+:root, .dark {
+    --body-background-fill: #0b0f19 !important;
+    --background-fill-primary: #111827 !important;
+    --background-fill-secondary: #1f2937 !important;
+    --border-color-primary: #374151 !important;
+    --block-background-fill: #111827 !important;
+    --block-label-text-color: #9ca3af !important;
+    --input-background-fill: #1f2937 !important;
+    --input-text-color: #f3f4f6 !important;
+}
+div.image-container,
+.upload-container,
+.builtin-image-editor {
+    background-color: #111827 !important;
+    border: 1px solid #374151 !important;
+}
+div.image-container canvas,
+[data-testid="image-element"] canvas {
+    background-color: #ffffff !important;
+}
+"""
+
+with gr.Blocks(theme=gr.themes.Soft(), css=custom_dark_css) as demo:
+    gr.Markdown("<h1 style='text-align: center;'>Chinese Handwriting Recognition & Translator</h1>")
     
     with gr.Tabs():
-       
+        
         with gr.TabItem("Character Recognition"):
             
             with gr.Row():
@@ -227,19 +261,17 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
                 queue=False
             )
             
-      
         with gr.TabItem("Translator"):
-            gr.Markdown("### Translate Chinese text to a language of your choice")
+            gr.Markdown("### Translate Chinese text and get Pinyin pronunciation")
             
             with gr.Row():
                 input_text = gr.Textbox(
                     label="Chinese Text Source",
                     placeholder="Text from Tab 1 will sync here automatically, or type manually...",
-                    lines=4
+                    lines=3
                 )
             
             with gr.Row():
-               
                 lang_dropdown = gr.Dropdown(
                     choices=list(LANGUAGE_CODES.keys()),
                     value="English 🇬🇧",
@@ -250,14 +282,21 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
             gr.Markdown("---")
             
             with gr.Row():
-                output_text = gr.Textbox(
-                    label="Translation Result", 
-                    value="Translation will appear here...", 
-                    interactive=False, 
-                    lines=5
-                )
+                with gr.Column():
+                    output_pinyin = gr.Textbox(
+                        label="🇨🇳 Pinyin Pronunciation (with Tones)",
+                        value="Pinyin pronunciation will appear here...",
+                        interactive=False,
+                        lines=3
+                    )
+                with gr.Column():
+                    output_text = gr.Textbox(
+                        label="Translation Result", 
+                        value="Translation will appear here...", 
+                        interactive=False, 
+                        lines=3
+                    )
 
-   
     def sync_tabs(text):
         return text
 
@@ -267,34 +306,28 @@ with gr.Blocks(theme=gr.themes.Soft()) as demo:
         outputs=input_text
     )
 
-    btn_top1.click(
-        fn=select_and_clear, 
-        inputs=[btn_top1, output_text_area], 
-        outputs=[output_text_area, canvas]
-    )
-    btn_top2.click(
-        fn=select_and_clear, 
-        inputs=[btn_top2, output_text_area], 
-        outputs=[output_text_area, canvas]
-    )
-    btn_top3.click(
-        fn=select_and_clear, 
-        inputs=[btn_top3, output_text_area], 
-        outputs=[output_text_area, canvas]
-    )
+    for btn in [btn_top1, btn_top2, btn_top3]:
+        btn.click(
+            fn=select_and_clear, 
+            inputs=[btn, output_text_area], 
+            outputs=[output_text_area, canvas]
+        )
     
     btn_clear_text.click(fn=lambda: "", outputs=output_text_area)
     
-    translate_btn.click(
+    input_text.change(
+        fn=convert_to_pinyin,
+        inputs=input_text,
+        outputs=output_pinyin
+    )
+    input_text.change(
         fn=translate_text,
         inputs=[input_text, lang_dropdown],
         outputs=output_text
     )
-    lang_dropdown.change(
-        fn=translate_text,
-        inputs=[input_text, lang_dropdown],
-        outputs=output_text
-    )
+    
+    translate_btn.click(fn=translate_text, inputs=[input_text, lang_dropdown], outputs=output_text)
+    lang_dropdown.change(fn=translate_text, inputs=[input_text, lang_dropdown], outputs=output_text)
 
 if __name__ == "__main__":
     demo.launch(share=False, inbrowser=True)
